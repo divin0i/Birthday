@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Some love — Scovy</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Playfair+Display:wght@500;700&family=Poppins:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 72 72%22><text y=%22.9em%22 font-size=%2260%22>💌</text></svg>"
+    />
+    <link rel="stylesheet" href="../style/wall.css" />
+  </head>
+  <body>
+    <main id="screen-wall" class="screen" hidden>
+      <header class="top">
+        <a class="back" href="../">← Retour</a>
+        <a class="add" id="addLink" href="?upload" hidden>Ajouter une photo</a>
+      </header>
+      <div class="hero">
+        <p class="kicker">Pour Scovy</p>
+        <h1>Some love</h1>
+        <p class="lede">Comme un mur de polaroids — survole, clique pour lire le mot.</p>
+      </div>
+      <p id="wallStatus" class="status" hidden></p>
+      <div id="wallLoader" class="wall-loader">
+        <div class="wall-loader__track" aria-busy="true" aria-live="polite">
+          <p class="wall-loader__text">J'arrive ma chere</p>
+          <img
+            class="wall-loader__run"
+            src="../img/running-scovy.gif"
+            alt=""
+            width="120"
+            height="120"
+            decoding="async"
+          />
+        </div>
+      </div>
+      <div class="wall-stage" id="wallStage">
+        <div class="page-title-wrap" aria-live="polite">
+          <input
+            type="text"
+            class="page-title"
+            id="pageTitle"
+            maxlength="40"
+            value="Page 1"
+            readonly
+            aria-label="Nom de la page"
+          />
+          <span class="page-title-count" id="pageTitleCount"></span>
+        </div>
+        <div class="wall-book" id="wallBook">
+          <div id="wallGrid" class="wall-grid"></div>
+        </div>
+      </div>
+
+      <div class="piu-dock" id="piuDock">
+        <div class="piu-dropup" id="piuMenu" hidden role="menu">
+          <button type="button" class="piu-item" id="actionTurnPage" role="menuitem">
+            <span class="piu-ico" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 4 8 12l6 8"/><path d="M20 4v16"/></svg>
+            </span>
+            Tourner la page
+          </button>
+          <div class="piu-item piu-item--sub">
+            <button type="button" class="piu-item__head" id="actionGotoToggle" aria-expanded="false">
+              <span class="piu-ico" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3h7v7"/><path d="M5 19 21 3"/><path d="M21 14v7h-7"/><path d="M10 14 3 21"/></svg>
+              </span>
+              Aller à une page
+            </button>
+            <div class="piu-subpanel" id="gotoPanel" hidden>
+              <label class="goto-row goto-row--select">
+                <span>Choisir</span>
+                <select id="gotoPageSelect" aria-label="Aller à une page"></select>
+              </label>
+              <button type="button" id="gotoApply" class="piu-go">OK</button>
+            </div>
+          </div>
+          <button type="button" class="piu-item" id="actionCreatePage" role="menuitem">
+            <span class="piu-ico" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+            </span>
+            Créer une page
+          </button>
+          <button type="button" class="piu-item" id="actionWallEdit" role="menuitem">
+            <span class="piu-ico" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </span>
+            Éditer le mur
+          </button>
+        </div>
+        <button
+          type="button"
+          class="piu-fab"
+          id="piuFab"
+          aria-label="Menu du mur"
+          aria-expanded="false"
+          aria-controls="piuMenu"
+        >
+          <img src="../img/PIU.png" alt="" />
+        </button>
+      </div>
+
+      <div class="wall-edit-bar" id="wallEditBar" hidden>
+        <p>Glisse · coin jaune = taille · coin bleu = rotation (molette aussi)</p>
+        <button type="button" id="wallCreatePage" class="ghost">Nouvelle page</button>
+        <button type="button" id="wallEditDone" class="send">Terminer</button>
+      </div>
+    </main>
+
+    <main id="screen-upload" class="screen" hidden>
+      <header class="top">
+        <a class="back" href="./">← Le mur</a>
+      </header>
+      <div class="hero">
+        <p class="kicker">Pour Scovy</p>
+        <h1>Laisse une photo</h1>
+        <p class="lede">Une photo, un mot à côté, et c'est sur le mur.</p>
+      </div>
+      <div class="composer" id="composer">
+        <label class="drop" id="drop">
+          <input id="file" type="file" accept="image/*" hidden />
+          <div class="tilt-frame" id="tiltFrame" hidden>
+            <img id="preview" alt="" />
+          </div>
+          <span id="dropLabel">
+            <strong>Choisis une photo</strong>
+            <em>ou dépose-la ici</em>
+          </span>
+        </label>
+        <aside class="popover" id="popover">
+          <h2>Un petit mot</h2>
+          <label class="field">
+            <span>Ton prénom</span>
+            <input
+              id="name"
+              maxlength="32"
+              autocomplete="given-name"
+              placeholder="Pour qu'elle sache que c'est toi"
+            />
+          </label>
+          <label class="field">
+            <span>Ton message</span>
+            <textarea
+              id="note"
+              rows="6"
+              placeholder="Un souvenir, une blague, un je t'aime…"
+            ></textarea>
+          </label>
+          <p class="count" id="count">0 caractères</p>
+          <label class="field tilt-field" id="tiltField" hidden>
+            <span>Inclinaison sur le mur</span>
+            <div class="tilt-row">
+              <input id="tilt" type="range" min="-24" max="24" step="1" value="0" />
+              <output id="tiltOut" for="tilt">0°</output>
+            </div>
+          </label>
+          <p class="form-error" id="formError" hidden></p>
+          <div class="popover-actions">
+            <button class="send" id="send" type="button">Envoyer sur le mur</button>
+            <button class="ghost" id="cancelEdit" type="button" hidden>Annuler</button>
+          </div>
+          <p class="fine">
+            Après l'envoi, 30 secondes pour modifier ou supprimer. Ensuite c'est figé.
+          </p>
+        </aside>
+      </div>
+      <p class="form-error drop-error" id="dropError" hidden></p>
+    </main>
+
+    <main id="screen-grace" class="screen" hidden>
+      <header class="top">
+        <a class="back" href="./">← Le mur</a>
+      </header>
+      <div class="hero">
+        <p class="kicker" id="graceKicker">C'est envoyé</p>
+        <h1 id="graceTitle">Regarde</h1>
+        <p class="lede" id="graceLede"></p>
+      </div>
+      <div class="timer" id="timer" aria-hidden="true"><span id="timerBar"></span></div>
+      <div class="grace-stage" id="graceStage"></div>
+      <div class="grace-actions" id="graceActions">
+        <button type="button" id="editBtn" class="ghost">Modifier</button>
+        <button type="button" id="deleteBtn" class="danger">Supprimer</button>
+      </div>
+    </main>
+
+    <main id="screen-closed" class="screen" hidden>
+      <div class="hero alone">
+        <p class="kicker">Pour Scovy</p>
+        <h1>C'est fermé</h1>
+        <p class="lede">On n'ajoute plus de photos pour l'instant.</p>
+        <a class="send inline" href="./">Voir le mur</a>
+      </div>
+    </main>
+
+    <div class="wall-music-wrap" id="wallMusicWrap">
+      <p class="wall-music-hint" id="wallMusicHint" hidden>
+        Appuie sur 🔊 pour lancer la musique
+      </p>
+      <button
+        type="button"
+        class="wall-music-control"
+        id="wallMusicControl"
+        aria-label="Couper ou activer le son"
+        aria-pressed="true"
+      >
+        <span id="wallMusicIcon">🔊</span>
+      </button>
+    </div>
+    <audio id="wallMusic" loop preload="auto">
+      <source
+        src="../music/Ed%20Sheeran%2C%20Pok%C3%A9mon%20-%20Celestial.mp3"
+        type="audio/mpeg"
+      />
+    </audio>
+
+    <div id="noteZoom" class="note-zoom" hidden>
+      <button type="button" class="note-zoom__backdrop" id="noteZoomBackdrop" aria-label="Fermer"></button>
+      <article class="note-zoom__polaroid" id="noteZoomCard" aria-live="polite">
+        <div class="note-zoom__photo">
+          <img id="noteZoomImg" alt="" />
+        </div>
+        <div class="note-zoom__body">
+          <p class="note-zoom__text" id="noteZoomText"></p>
+          <p class="note-zoom__sign" id="noteZoomSign"></p>
+        </div>
+      </article>
+    </div>
+
+    <script type="module" src="../script/wall.js"></script>
+  </body>
+</html>

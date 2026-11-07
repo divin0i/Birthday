@@ -1,0 +1,76 @@
+{
+  "rules": {
+    "wallMeta": {
+      ".read": true,
+      ".write": true,
+      "pageCount": {
+        ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 48"
+      },
+      "names": {
+        "$id": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40"
+        }
+      },
+      "$other": {
+        ".validate": false
+      }
+    },
+    "wallLayouts": {
+      ".read": true,
+      "$id": {
+        ".write": true,
+        "page": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < 100"
+        },
+        "x": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+        },
+        "y": {
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1"
+        },
+        "w": {
+          ".validate": "newData.isNumber() && newData.val() > 0.05 && newData.val() <= 0.55"
+        },
+        "tilt": {
+          ".validate": "newData.isNumber() && newData.val() >= -45 && newData.val() <= 45"
+        },
+        "z": {
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 50"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "memories": {
+      ".read": true,
+      "$id": {
+        ".write": "( !data.exists() && newData.exists() && newData.child('createdAt').val() == now && newData.child('image').val().beginsWith('data:image/jpeg;base64,') && newData.child('removed').val() != true ) || ( data.exists() && newData.exists() && newData.child('createdAt').val() == data.child('createdAt').val() && newData.child('editKey').val() == data.child('editKey').val() && now < data.child('createdAt').val() + 30000 )",
+        "name": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 32"
+        },
+        "note": {
+          ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 8000"
+        },
+        "image": {
+          ".validate": "newData.isString() && newData.val().length < 400000 && ( newData.val().beginsWith('data:image/jpeg;base64,') || ( newData.val() == '' && newData.parent().child('removed').val() == true ) )"
+        },
+        "createdAt": {
+          ".validate": "newData.isNumber()"
+        },
+        "editKey": {
+          ".validate": "newData.isString() && newData.val().length >= 16 && newData.val().length <= 40"
+        },
+        "removed": {
+          ".validate": "newData.isBoolean()"
+        },
+        "tilt": {
+          ".validate": "newData.isNumber() && newData.val() >= -45 && newData.val() <= 45"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

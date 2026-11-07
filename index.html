@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Happy Birthday Scovy! 🎂</title>
+    <script type="module" src="./script/birthday-age.js"></script>
     <link
       href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Pacifico&family=Great+Vibes&family=Playfair+Display:wght@400;700&family=Poppins:wght@300;400;600&display=swap"
       rel="stylesheet"
@@ -35,7 +36,7 @@
           <p>Ne me click pas dessus 🫣. . .</p>
         </div>
         <div class="card-back">
-          <h2>Happy 22rd Birthday! <br />🎉🎉🎉</h2>
+          <h2>Happy <span data-scovy-age-ordinal>23rd</span> Birthday! <br />🎉🎉🎉</h2>
           <img src="./img/2.jpeg" alt="1" class="profile-picture" id="profilePic" style="width: 100px; height: 100px; object-fit:contain;" />
           <p>
             <span>Scovy</span>
@@ -58,13 +59,13 @@
       </div>
 
       <div class="section-three">
-        <p>22 ans c'est juste le début mdr !! 😋😋 🎂</p>
+        <p><span data-scovy-age>23</span> ans c'est juste le début mdr !! 😋😋 🎂</p>
       </div>
 
       <div class="section-four">
         <div class="text-box">
           <p class="hbd-chatbox">
-            Happy birthday, Your highness 🥳🥳 ont se dit que 22 ans c'est enorme mais c'est juste la ligne de départ 😁 thought ko the traditional "juwayeze aniverisaire" messages are outdated by now, gotta be creative on these streets lol 💕 fin bref, je te souhaite un très bon anniversaire et des belles aventures dans les prochaines années, life's gonna be awesome c'est juste la fondation qui est chaud mais apres c'est pas si mal(🤭 je t'ai spoilé la surprise). Sache que pour le coup t'es la meilleure cousine du monde entier et que on t'aime vraiment 😘 que tu le veuille ou non t'es bloqués avec nous jusqu'a la fin du film...(j'ai plus les mots, should've ai generated this🤭). Bref je t'aime beaucoup Scovy et je te souhaite un très bon anniversaire 🎉🎉
+            Joyeuse anniversaire ma tres chere cousine preferé 🥳🥳 can't say anything more to God's perfection except for...(a lot mdr🤣🤣) bon however you might think life is hard/harsh/unfair/unbearable/etc, at the end of the day 'it's just life', nothing compared to the eternity we'll enjoy next😉, struggle is just a human-made scam(let's argue on this later n other stuff that this will bring up 🤣🤣) this year is going to be bangers after bangers et la meilleure cousine que t'es peut pas les profiter toute seule donc sache qu'on est tjrs la pour tout les moments que tu pourrais meme pas imaginer. So wisdom of the year comming up...[Say to your neighbour] "I've got a whole army of cousins n people that loves me, each with a unique personality, mood and a whole lot of unpredicatable cute stuff that can come up with just being around them, and as if that was the greatest part of my life i also know that God is and will be always here for me so....wait where's my bible,...[and there she goes smiling 😉]". bon 🤣🤣 cette anne j'en ai ecrit des trucs(remember i suck at french grammar so ignore the errors in there, just feel the love🤣🤣) 😏 mais in all honesty Juwayeze aniveriseri et we all love you "mucho mas/bya cyane/beaucoup/a lot/很多" some in their ways🤣 n again we ain't goig no where so can't wait to see this year's adventures and drama 😏💕.
           </p>
           <p class="fake-btn">Envoie <span style="font-size: 9px; display: block;">24h plus tard 💌</span></p>
         </div>
@@ -136,8 +137,30 @@
     </div>
 
     <!-- Music Control -->
-    <div class="music-control" id="musicControl">
-      <span id="musicIcon">🔊</span>
+    <div class="music-wrap" id="musicWrap">
+      <p class="music-hint" id="musicHint" hidden>
+        Tap 🔊 to allow sound
+      </p>
+      <button
+        type="button"
+        class="music-control"
+        id="musicControl"
+        aria-label="Mute or unmute music"
+        aria-pressed="true"
+      >
+        <span id="musicIcon">🔊</span>
+      </button>
+    </div>
+
+    <div class="piu-dock piu-dock--home" id="homePiuDock">
+      <a
+        class="piu-fab"
+        id="homePiuFab"
+        href="./memorywall/"
+        aria-label="Some love — le mur de polaroids"
+      >
+        <img src="./img/PIU.png" alt="" width="48" height="48" decoding="async" />
+      </a>
     </div>
 
     <!-- Hidden Audio -->

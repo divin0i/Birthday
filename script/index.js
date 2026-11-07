@@ -35,14 +35,16 @@ const card = document.getElementById("birthdayCard");
 const cardOverlay = document.getElementById("cardOverlay");
 const openBtn = document.getElementById("openBtn");
 const timelineContainer = document.getElementById("timelineContainer");
+const musicWrap = document.getElementById("musicWrap");
 const musicControl = document.getElementById("musicControl");
 const musicIcon = document.getElementById("musicIcon");
+const musicHint = document.getElementById("musicHint");
 const bgMusic = audio;
 const blowInstruction = document.getElementById("blowInstruction");
 const blownMessage = document.getElementById("blownMessage");
 const cakeElement = document.getElementById("cake");
 
-let musicPlaying = false;
+let musicEnabled = true;
 let candlesBlown = false;
 let candles = [];
 let audioContext, analyser, microphone;
@@ -61,38 +63,56 @@ openBtn.addEventListener("click", function (e) {
 
   setTimeout(() => {
     timelineContainer.classList.add("active");
-    musicControl.style.display = "flex";
+    musicWrap?.classList.add("is-visible");
 
-    // Reset and play music
     bgMusic.currentTime = 0;
-    bgMusic
-      .play()
-      .then(() => {
-        musicPlaying = true;
-        musicIcon.textContent = "🔊";
-      })
-      .catch(() => {
-        console.log("Music autoplay prevented");
-      });
+    musicEnabled = true;
+    musicControl.setAttribute("aria-pressed", "true");
+    attemptBgMusicPlay();
 
     startBalloons();
     startConfetti();
     startFireworks();
     animationTimeline();
+
+    import("./wall-prefetch.js")
+      .then((m) => m.warmFirstWallPage())
+      .catch(() => {});
   }, 800);
 });
 
-// Music control
-musicControl.addEventListener("click", function () {
-  if (musicPlaying) {
+function attemptBgMusicPlay() {
+  return bgMusic
+    .play()
+    .then(() => {
+      musicIcon.textContent = "🔊";
+      if (musicHint) musicHint.hidden = true;
+      musicControl.setAttribute("aria-pressed", "true");
+      return true;
+    })
+    .catch(() => {
+      musicIcon.textContent = "🔇";
+      if (musicEnabled && musicHint) musicHint.hidden = false;
+      return false;
+    });
+}
+
+musicControl.addEventListener("click", async function () {
+  if (musicEnabled && bgMusic.paused) {
+    await attemptBgMusicPlay();
+    return;
+  }
+  if (musicEnabled && !bgMusic.paused) {
     bgMusic.pause();
     musicIcon.textContent = "🔇";
-    musicPlaying = false;
-  } else {
-    bgMusic.play();
-    musicIcon.textContent = "🔊";
-    musicPlaying = true;
+    musicEnabled = false;
+    if (musicHint) musicHint.hidden = true;
+    musicControl.setAttribute("aria-pressed", "false");
+    return;
   }
+  musicEnabled = true;
+  musicControl.setAttribute("aria-pressed", "true");
+  await attemptBgMusicPlay();
 });
 
 // Create candles on cake
@@ -306,15 +326,9 @@ function animationTimeline() {
 
     // Reset and play music again
     bgMusic.currentTime = 0;
-    bgMusic
-      .play()
-      .then(() => {
-        musicPlaying = true;
-        musicIcon.textContent = "🔊";
-      })
-      .catch(() => {
-        console.log("Music autoplay prevented");
-      });
+    musicEnabled = true;
+    musicControl.setAttribute("aria-pressed", "true");
+    attemptBgMusicPlay();
 
     tl.restart();
   });
@@ -375,7 +389,7 @@ function pauseExperience() {
     tl.pause();
   }
   // Pause music
-  if (musicPlaying) {
+  if (!bgMusic.paused) {
     bgMusic.pause();
     musicIcon.textContent = "🔇";
   }
@@ -387,9 +401,8 @@ function resumeExperience() {
     tl.resume();
   }
   // Resume music
-  if (musicPlaying) {
-    bgMusic.play();
-    musicIcon.textContent = "🔊";
+  if (musicEnabled) {
+    attemptBgMusicPlay();
   }
 }
 
