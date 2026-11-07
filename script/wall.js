@@ -95,6 +95,7 @@ const actionCreatePage = document.getElementById("actionCreatePage");
 const wallCreatePage = document.getElementById("wallCreatePage");
 const actionWallEdit = document.getElementById("actionWallEdit");
 const wallEditBar = document.getElementById("wallEditBar");
+const wallEditHint = document.getElementById("wallEditHint");
 const wallEditDone = document.getElementById("wallEditDone");
 const noteZoom = document.getElementById("noteZoom");
 const noteZoomBackdrop = document.getElementById("noteZoomBackdrop");
@@ -128,7 +129,11 @@ const state = {
   flippedId: null,
   noteZoomOpen: false,
   wallMusicOn: true,
+  placementMode: false,
+  placementId: null,
 };
+
+let wallBooted = false;
 
 const uploadRoute = new URLSearchParams(location.search).has("upload");
 
@@ -137,6 +142,8 @@ function showScreen(name) {
   for (const [key, el] of Object.entries(screens)) {
     el.hidden = key !== name;
   }
+  if (name === "wall") updatePlacementBar();
+  else if (wallEditBar) wallEditBar.hidden = true;
   syncWallMusic();
 }
 
@@ -431,6 +438,28 @@ function bringCardToFront(card) {
   card.style.zIndex = String(state.editZ);
 }
 
+function baseZForMemory(memory, fallback = 2) {
+  const saved = state.layouts[memory.id];
+  if (saved && Number.isFinite(saved.z)) return saved.z;
+  return fallback;
+}
+
+function resetCardZIndex(card, memory) {
+  if (!card || !memory) return;
+  const base = baseZForMemory(
+    memory,
+    parseInt(card.dataset.baseZ, 10) || 2
+  );
+  card.style.zIndex = String(base);
+  card.dataset.baseZ = String(base);
+}
+
+function dismissWallFocus() {
+  closeNoteZoom();
+  unflipAllExcept();
+  state.flippedId = null;
+}
+
 function cardCenter(card) {
   const r = card.getBoundingClientRect();
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -608,22 +637,119 @@ function goToPage(target, { animate = false } = {}) {
   closePiuMenu();
 }
 
+function pageIndexForMemory(items, id) {
+  const sorted = sortChronological(items);
+  const idx = sorted.findIndex((m) => m.id === id);
+  if (idx < 0) return Math.max(0, photoPageCount(items) - 1);
+  return Math.floor(idx / PICTURES_PER_PAGE);
+}
+
+function updatePlacementBar() {
+  const graceLeft = msLeft();
+  const inGrace = graceLeft > 0 && !!state.grant;
+  const placing = state.placementMode && inGrace;
+  const graceSecs = Math.ceil(graceLeft / 1000);
+
+  if (wallEditBar) {
+    wallEditBar.hidden = !(state.editMode || inGrace);
+  }
+  if (wallEditDone) wallEditDone.hidden = !state.editMode;
+  if (wallEditHint) {
+    if (placing) {
+      wallEditHint.textContent = `Place ta photo où tu veux · ${graceSecs}s pour modifier ou supprimer`;
+    } else if (state.editMode) {
+      wallEditHint.textContent = inGrace
+        ? `Glisse pour ajuster · ${graceSecs}s pour modifier ou supprimer`
+        : "Glisse · coin jaune = taille · coin bleu = rotation (molette aussi)";
+    } else if (inGrace) {
+      wallEditHint.textContent = `Encore ${graceSecs}s pour modifier ou supprimer ta photo`;
+    } else {
+      wallEditHint.textContent =
+        "Glisse · coin jaune = taille · coin bleu = rotation (molette aussi)";
+    }
+  }
+  if (editBtn) editBtn.hidden = !inGrace;
+  if (deleteBtn) deleteBtn.hidden = !inGrace;
+  if (wallCreatePage) wallCreatePage.hidden = placing || (inGrace && !state.editMode);
+}
+
 function setEditMode(on) {
   state.editMode = on;
   wallGrid?.classList.toggle("is-edit-mode", on);
-  if (wallEditBar) wallEditBar.hidden = !on;
   if (piuDock) piuDock.classList.toggle("is-dimmed", on);
+  updatePlacementBar();
   updatePageIndicator(state.lastWallItems || []);
   if (!on) {
     saveCurrentPageName();
-    state.selectedId = null;
+    if (!state.placementMode) state.selectedId = null;
+    dismissWallFocus();
     state.wallSig = "";
     renderWall(state.lastWallItems || []);
   } else {
     closePiuMenu();
+    dismissWallFocus();
     state.wallSig = "";
     renderWall(state.lastWallItems || []);
   }
+}
+
+function ensureWallBooted() {
+  if (wallBooted) return;
+  wallBooted = true;
+  initWallChrome();
+  initWallSwipe();
+  initWallMusic();
+  watchWall();
+  let resizeTimer;
+  window.addEventListener("resize", () => {
+    window.clearTimeout(resizeTimer);
+    resizeTimer = window.setTimeout(() => {
+      state.wallSig = "";
+      if (state.lastWallItems) renderWall(state.lastWallItems);
+    }, 160);
+  });
+}
+
+function enterPostUploadWall(memory) {
+  saveGrant({
+    id: memory.id,
+    editKey: memory.editKey,
+    createdAt: memory.createdAt,
+  });
+  state.visible = memory;
+  state.editing = null;
+  state.deleteArmed = false;
+  if (deleteBtn) deleteBtn.textContent = "Supprimer";
+  state.placementMode = true;
+  state.placementId = memory.id;
+  state.selectedId = memory.id;
+
+  try {
+    const url = new URL(location.href);
+    if (url.searchParams.has("upload")) {
+      url.searchParams.delete("upload");
+      history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+  } catch {
+    /* ignore */
+  }
+
+  ensureWallBooted();
+  showScreen("wall");
+
+  let items = state.lastWallItems || [];
+  if (!items.some((m) => m.id === memory.id)) {
+    items = sortChronological([...items, memory]);
+  }
+  const page = pageIndexForMemory(items, memory.id);
+  if (page !== state.currentPage) {
+    state.currentPage = page;
+    localStorage.setItem("wall-page", String(page));
+  }
+  state.lastWallItems = items;
+  setEditMode(true);
+  armTimer();
+  updatePlacementBar();
 }
 
 function togglePiuMenu(force) {
@@ -732,7 +858,14 @@ function unflipAllExcept(keepInner = null) {
   document.querySelectorAll(".memory-inner.is-flipped").forEach((node) => {
     if (keepInner && node === keepInner) return;
     node.classList.remove("is-flipped");
+    const card = node.closest(".memory");
+    const id = card?.dataset?.id;
+    if (card && id) {
+      const memory = state.lastWallItems?.find((m) => m.id === id);
+      if (memory) resetCardZIndex(card, memory);
+    }
   });
+  if (!keepInner) state.flippedId = null;
 }
 
 function closeNoteZoom() {
@@ -801,10 +934,11 @@ function wireCardFlip(button, inner, note, memory, img) {
     unflipAllExcept();
 
     if (wasFlipped) {
-      state.flippedId = null;
+      resetCardZIndex(button, memory);
       return;
     }
 
+    bringCardToFront(button);
     inner.classList.add("is-flipped");
     state.flippedId = memory.id;
     requestAnimationFrame(() => {
@@ -834,6 +968,7 @@ function createCard(memory, layout = {}) {
     button.style.top = `${top}px`;
     button.style.width = `${cardW}px`;
     button.style.zIndex = String(z);
+    button.dataset.baseZ = String(z);
   }
   button.setAttribute("aria-label", `Message de ${memory.name}. Clique pour le lire.`);
 
@@ -987,6 +1122,14 @@ function watchWall() {
       const items = mergeWallItems(firebaseItems);
       wallStatus.textContent = "";
       wallStatus.hidden = true;
+      if (state.placementId) {
+        const page = pageIndexForMemory(items, state.placementId);
+        if (page !== state.currentPage) {
+          state.currentPage = page;
+          localStorage.setItem("wall-page", String(page));
+        }
+        state.selectedId = state.placementId;
+      }
       renderWall(items);
       prefetchAroundPage(items, state.currentPage);
       if (items.length && wallGrid.clientWidth < 48) {
@@ -1105,7 +1248,19 @@ function initWallChrome() {
   });
 
   wallEditDone?.addEventListener("click", () => {
+    if (state.placementMode && msLeft() > 0) {
+      state.placementMode = false;
+      updatePlacementBar();
+    }
     setEditMode(false);
+  });
+
+  wallGrid?.addEventListener("pointerdown", (e) => {
+    if (state.editMode) return;
+    if (e.target.closest(".memory")) return;
+    if (e.target.closest(".wall-edit-bar, .piu-dock, .top, .wall-music-wrap"))
+      return;
+    dismissWallFocus();
   });
 }
 
@@ -1177,14 +1332,13 @@ function lockGrace() {
   state.timer = 0;
   state.grant = null;
   state.editing = null;
+  state.placementMode = false;
+  state.placementId = null;
   localStorage.removeItem(STORE);
   graceActions.hidden = true;
   timer.hidden = true;
-  graceKicker.textContent = "C'est figé";
-  graceTitle.textContent = "Sur le mur";
-  graceLede.textContent =
-    "Les 30 secondes sont passées. Tu peux encore la regarder, plus la changer.";
-  if (state.screen === "upload") showScreen("grace");
+  if (state.editMode) setEditMode(false);
+  else updatePlacementBar();
 }
 
 function tick() {
@@ -1194,9 +1348,8 @@ function tick() {
     lockGrace();
     return;
   }
-  if (state.screen === "grace") {
-    graceLede.textContent = `Il te reste ${Math.ceil(left / 1000)}s pour la regarder, la modifier ou la supprimer.`;
-    timerBar.style.transform = `scaleX(${left / GRACE_MS})`;
+  if (state.screen === "wall" && (state.placementMode || state.editMode || msLeft() > 0)) {
+    updatePlacementBar();
   }
 }
 
@@ -1206,18 +1359,7 @@ function armTimer() {
 }
 
 async function showGrace(memory) {
-  saveGrant({
-    id: memory.id,
-    editKey: memory.editKey,
-    createdAt: memory.createdAt,
-  });
-  state.visible = memory;
-  state.editing = null;
-  state.deleteArmed = false;
-  deleteBtn.textContent = "Supprimer";
-  showScreen("grace");
-  renderGrace(memory);
-  armTimer();
+  enterPostUploadWall(memory);
 }
 
 async function compressImage(file) {
@@ -1366,13 +1508,10 @@ async function deleteMemory() {
     });
     clearGrant();
     state.visible = null;
-    graceActions.hidden = true;
-    timer.hidden = true;
-    graceStage.replaceChildren();
-    graceKicker.textContent = "C'est retiré";
-    graceTitle.textContent = "Disparu";
-    graceLede.textContent = "La photo n'est plus sur le mur.";
-    showScreen("grace");
+    state.placementMode = false;
+    state.placementId = null;
+    if (state.editMode) setEditMode(false);
+    showScreen("wall");
   } catch (err) {
     showError(formError, friendlyError(err));
     graceLede.textContent = friendlyError(err);
@@ -1415,7 +1554,11 @@ tiltInput?.addEventListener("input", () => {
 
 sendBtn.addEventListener("click", submitMemory);
 cancelEdit.addEventListener("click", () => {
-  if (state.visible) showGrace(state.visible);
+  if (state.visible) enterPostUploadWall(state.visible);
+  else if (state.grant?.id && state.lastWallItems) {
+    const memory = state.lastWallItems.find((m) => m.id === state.grant.id);
+    if (memory) enterPostUploadWall(memory);
+  }
 });
 editBtn.addEventListener("click", () => {
   if (state.visible && msLeft() > 0) openComposer(state.visible);
@@ -1429,9 +1572,11 @@ if (uploadRoute && !UPLOADS_ENABLED) {
 } else if (uploadRoute) {
   const grant = readGrant();
   if (!grant) {
+    ensureWallBooted();
     openComposer(null);
   } else {
     state.grant = grant;
+    ensureWallBooted();
     get(ref(db, `memories/${grant.id}`))
       .then((snap) => {
         const data = snap.val();
@@ -1440,7 +1585,7 @@ if (uploadRoute && !UPLOADS_ENABLED) {
           openComposer(null);
           return;
         }
-        showGrace({ id: grant.id, ...data });
+        enterPostUploadWall({ id: grant.id, ...data });
       })
       .catch(() => {
         openComposer(null);
@@ -1448,19 +1593,8 @@ if (uploadRoute && !UPLOADS_ENABLED) {
   }
 } else {
   showScreen("wall");
-  initWallChrome();
-  initWallSwipe();
-  initWallMusic();
+  ensureWallBooted();
   import("./wall-prefetch.js")
     .then((m) => m.warmFirstWallPage())
     .catch(() => {});
-  watchWall();
-  let resizeTimer;
-  window.addEventListener("resize", () => {
-    window.clearTimeout(resizeTimer);
-    resizeTimer = window.setTimeout(() => {
-      state.wallSig = "";
-      if (state.lastWallItems) renderWall(state.lastWallItems);
-    }, 160);
-  });
 }

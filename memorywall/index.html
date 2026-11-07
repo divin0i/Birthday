@@ -106,7 +106,11 @@
       </div>
 
       <div class="wall-edit-bar" id="wallEditBar" hidden>
-        <p>Glisse · coin jaune = taille · coin bleu = rotation (molette aussi)</p>
+        <p id="wallEditHint">
+          Glisse · coin jaune = taille · coin bleu = rotation (molette aussi)
+        </p>
+        <button type="button" id="editBtn" class="ghost" hidden>Modifier</button>
+        <button type="button" id="deleteBtn" class="danger" hidden>Supprimer</button>
         <button type="button" id="wallCreatePage" class="ghost">Nouvelle page</button>
         <button type="button" id="wallEditDone" class="send">Terminer</button>
       </div>
@@ -165,7 +169,8 @@
             <button class="ghost" id="cancelEdit" type="button" hidden>Annuler</button>
           </div>
           <p class="fine">
-            Après l'envoi, 30 secondes pour modifier ou supprimer. Ensuite c'est figé.
+            Après l'envoi, place ta photo sur le mur — 30 secondes pour modifier ou
+            supprimer.
           </p>
         </aside>
       </div>
@@ -183,10 +188,7 @@
       </div>
       <div class="timer" id="timer" aria-hidden="true"><span id="timerBar"></span></div>
       <div class="grace-stage" id="graceStage"></div>
-      <div class="grace-actions" id="graceActions">
-        <button type="button" id="editBtn" class="ghost">Modifier</button>
-        <button type="button" id="deleteBtn" class="danger">Supprimer</button>
-      </div>
+      <div class="grace-actions" id="graceActions" hidden></div>
     </main>
 
     <main id="screen-closed" class="screen" hidden>
