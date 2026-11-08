@@ -244,6 +244,10 @@ h1 {
   min-height: 420px;
 }
 
+.wall-grid.is-repaint .memory {
+  animation: none;
+}
+
 .wall-grid .memory--scatter {
   position: absolute;
 }

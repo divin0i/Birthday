@@ -97,6 +97,7 @@ const actionWallEdit = document.getElementById("actionWallEdit");
 const wallEditBar = document.getElementById("wallEditBar");
 const wallEditHint = document.getElementById("wallEditHint");
 const wallEditDone = document.getElementById("wallEditDone");
+const wallGraceEdit = document.getElementById("wallGraceEdit");
 const noteZoom = document.getElementById("noteZoom");
 const noteZoomBackdrop = document.getElementById("noteZoomBackdrop");
 const noteZoomImg = document.getElementById("noteZoomImg");
@@ -134,6 +135,8 @@ const state = {
 };
 
 let wallBooted = false;
+let wallHasPainted = false;
+let renderWallTimer = 0;
 
 const uploadRoute = new URLSearchParams(location.search).has("upload");
 
@@ -237,20 +240,22 @@ function friendlyError(err) {
 function readGrant() {
   try {
     const grant = JSON.parse(localStorage.getItem(STORE) || "null");
-    if (!grant?.id || !grant.createdAt) return null;
-    if (Date.now() > grant.createdAt + GRACE_MS) {
+    if (!grant?.id || grant.createdAt == null) return null;
+    const createdAt = createdAtMs(grant.createdAt);
+    if (!createdAt || Date.now() > createdAt + GRACE_MS) {
       localStorage.removeItem(STORE);
       return null;
     }
-    return grant;
+    return { ...grant, createdAt };
   } catch {
     return null;
   }
 }
 
 function saveGrant(grant) {
-  state.grant = grant;
-  localStorage.setItem(STORE, JSON.stringify(grant));
+  const createdAt = createdAtMs(grant.createdAt) || Date.now();
+  state.grant = { ...grant, createdAt };
+  localStorage.setItem(STORE, JSON.stringify(state.grant));
 }
 
 function clearGrant() {
@@ -260,9 +265,23 @@ function clearGrant() {
   state.timer = 0;
 }
 
+function createdAtMs(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value < 1e12 ? value * 1000 : value;
+  }
+  return 0;
+}
+
 function msLeft() {
   if (!state.grant) return 0;
-  return state.grant.createdAt + GRACE_MS - Date.now();
+  const t0 = createdAtMs(state.grant.createdAt);
+  if (!t0) return 0;
+  return t0 + GRACE_MS - Date.now();
+}
+
+function memoryDomId(id) {
+  if (typeof CSS !== "undefined" && CSS.escape) return CSS.escape(id);
+  return String(id).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function hashId(id) {
@@ -381,9 +400,24 @@ function wallCanvasHeight(count) {
   return Math.max(base, 340 + count * perPhoto + spread);
 }
 
-function cardWidthForCanvas(canvasWidth) {
-  const ratio = canvasWidth < 520 ? 0.36 : canvasWidth < 900 ? 0.26 : 0.2;
-  return Math.min(230, Math.max(108, canvasWidth * ratio));
+/** Target polaroid width as a fraction of the wall (similar feel on phone vs desktop). */
+function defaultLayoutWidthFrac(canvasWidth) {
+  const narrow = canvasWidth < 520;
+  const targetPx = narrow
+    ? canvasWidth * 0.42
+    : canvasWidth < 900
+      ? canvasWidth * 0.28
+      : 210;
+  const frac = targetPx / Math.max(1, canvasWidth);
+  return Math.min(0.48, Math.max(0.18, frac));
+}
+
+function layoutCardWidth(widthFrac, canvasWidth) {
+  const raw = widthFrac * canvasWidth;
+  const narrow = canvasWidth < 520;
+  const min = narrow ? 122 : 156;
+  const max = narrow ? canvasWidth * 0.55 : Math.min(300, canvasWidth * 0.36);
+  return Math.min(max, Math.max(min, raw));
 }
 
 function scatterLayout(memory, pageItems, canvasWidth, canvasHeight) {
@@ -394,7 +428,7 @@ function scatterLayout(memory, pageItems, canvasWidth, canvasHeight) {
     typeof saved.y === "number" &&
     saved.page === state.currentPage
   ) {
-    const cardW = (saved.w || 0.2) * canvasWidth;
+    const cardW = layoutCardWidth(saved.w || defaultLayoutWidthFrac(canvasWidth), canvasWidth);
     return {
       left: saved.x * canvasWidth,
       top: saved.y * canvasHeight,
@@ -408,11 +442,9 @@ function scatterLayout(memory, pageItems, canvasWidth, canvasHeight) {
   const u1 = seededUnit(seed, 1);
   const u2 = seededUnit(seed, 2);
   const u3 = seededUnit(seed, 3);
-  const u4 = seededUnit(seed, 4);
   const count = pageItems.length || 1;
 
-  const baseW = cardWidthForCanvas(canvasWidth);
-  const cardW = baseW * (0.88 + u4 * 0.24);
+  const cardW = layoutCardWidth(defaultLayoutWidthFrac(canvasWidth), canvasWidth);
   const cardH = cardW * (4 / 3);
   const margin = canvasWidth < 520 ? 6 : 12;
 
@@ -671,26 +703,172 @@ function updatePlacementBar() {
   if (editBtn) editBtn.hidden = !inGrace;
   if (deleteBtn) deleteBtn.hidden = !inGrace;
   if (wallCreatePage) wallCreatePage.hidden = placing || (inGrace && !state.editMode);
+  if (wallGraceEdit) {
+    wallGraceEdit.hidden = !(inGrace && !state.editMode);
+  }
+}
+
+function openWallEdit() {
+  if (state.editMode) return;
+  state.placementMode = false;
+  state.placementId = null;
+  closePiuMenu();
+  updatePlacementBar();
+  setEditMode(true);
 }
 
 function setEditMode(on) {
+  const was = state.editMode;
   state.editMode = on;
   wallGrid?.classList.toggle("is-edit-mode", on);
   if (piuDock) piuDock.classList.toggle("is-dimmed", on);
   updatePlacementBar();
   updatePageIndicator(state.lastWallItems || []);
+  if (pageTitle) {
+    pageTitle.readOnly = !on;
+    pageTitle.classList.toggle("is-editable", on);
+  }
   if (!on) {
     saveCurrentPageName();
-    if (!state.placementMode) state.selectedId = null;
+    if (!state.placementMode) {
+      state.selectedId = null;
+      state.placementId = null;
+    }
     dismissWallFocus();
-    state.wallSig = "";
-    renderWall(state.lastWallItems || []);
+    wallGrid?.querySelectorAll(".memory.is-selected").forEach((el) =>
+      el.classList.remove("is-selected")
+    );
+    if (was) {
+      state.wallSig = "";
+      scheduleRenderWall(state.lastWallItems || []);
+    }
   } else {
     closePiuMenu();
     dismissWallFocus();
-    state.wallSig = "";
-    renderWall(state.lastWallItems || []);
+    if (state.selectedId) {
+      wallGrid?.querySelectorAll(".memory").forEach((el) => {
+        el.classList.toggle("is-selected", el.dataset.id === state.selectedId);
+      });
+    }
   }
+}
+
+function scheduleRenderWall(items) {
+  window.clearTimeout(renderWallTimer);
+  renderWallTimer = window.setTimeout(() => renderWall(items), 60);
+}
+
+function patchMemoryCard(memory) {
+  const card = wallGrid?.querySelector(`.memory[data-id="${memoryDomId(memory.id)}"]`);
+  if (!card) return false;
+  const img = card.querySelector(".memory-photo");
+  const note = card.querySelector(".note-text");
+  card.querySelectorAll(".caption").forEach((el) => {
+    el.textContent = memory.name || "";
+  });
+  if (note) {
+    note.textContent = memory.note || "";
+    if (card.querySelector(".memory-inner.is-flipped")) {
+      requestAnimationFrame(() => fitNoteElement(note, 15.5, 9.5, true));
+    }
+  }
+  if (img && typeof memory.image === "string" && memory.image.startsWith("data:image/jpeg")) {
+    const next = wallPhotoSrc(memory, !img.hasAttribute("data-src"));
+    if (img.src !== next) img.src = next;
+  }
+  const tilt =
+    typeof memory.tilt === "number" && Number.isFinite(memory.tilt)
+      ? memory.tilt
+      : parseTiltDeg(card);
+  card.style.setProperty("--tilt", `${tilt}deg`);
+  return true;
+}
+
+function syncWallItemsWhileEditing(items, prev) {
+  const prevIds = new Set(prev.map((m) => m.id));
+  const nextIds = new Set(items.map((m) => m.id));
+  const pageItems = itemsForPage(items, state.currentPage);
+  const onPage = new Set(pageItems.map((m) => m.id));
+  const canvasW = wallGrid?.clientWidth || window.innerWidth - 16;
+  const canvasH = wallCanvasHeight(pageItems.length || 1);
+
+  for (const id of prevIds) {
+    if (!nextIds.has(id)) {
+      wallGrid
+        ?.querySelector(`.memory[data-id="${memoryDomId(id)}"]`)
+        ?.remove();
+    }
+  }
+
+  for (const memory of items) {
+    if (prevIds.has(memory.id)) patchMemoryCard(memory);
+  }
+
+  for (const memory of items) {
+    if (prevIds.has(memory.id) || !onPage.has(memory.id)) continue;
+    const spot = scatterLayout(memory, pageItems, canvasW, canvasH);
+    const card = createCard(memory, { scatter: true, ...spot });
+    if (state.selectedId === memory.id) card.classList.add("is-selected");
+    wallGrid?.append(card);
+  }
+
+  const empty = wallGrid?.querySelector(".empty");
+  if (pageItems.length && empty) empty.remove();
+}
+
+function applyWallItemsFromFirebase(items) {
+  const prev = state.lastWallItems || [];
+  const prevIds = prev.map((m) => m.id).join(",");
+  const nextIds = items.map((m) => m.id).join(",");
+  const structureChanged = prevIds !== nextIds || prev.length !== items.length;
+
+  state.lastWallItems = items;
+
+  if (state.placementMode && state.placementId) {
+    const page = pageIndexForMemory(items, state.placementId);
+    if (page !== state.currentPage) {
+      state.currentPage = page;
+      localStorage.setItem("wall-page", String(page));
+      scheduleRenderWall(items);
+      return;
+    }
+    state.selectedId = state.placementId;
+  }
+
+  if (state.editMode) {
+    if (structureChanged) syncWallItemsWhileEditing(items, prev);
+    else items.forEach((m) => patchMemoryCard(m));
+    return;
+  }
+
+  if (!structureChanged && wallHasPainted) {
+    let patchedAll = true;
+    for (const m of items) {
+      if (!patchMemoryCard(m)) patchedAll = false;
+    }
+    if (patchedAll) return;
+  }
+
+  scheduleRenderWall(items);
+}
+
+function returnAfterMemoryEdit(memory) {
+  state.visible = memory;
+  const base = state.lastWallItems || [];
+  const items = sortChronological([
+    ...base.filter((m) => m.id !== memory.id),
+    memory,
+  ]);
+  applyWallItemsFromFirebase(items);
+  showScreen("wall");
+  state.selectedId = state.placementId || memory.id;
+  if (state.placementMode || state.editMode) {
+    wallGrid?.querySelectorAll(".memory").forEach((el) => {
+      el.classList.toggle("is-selected", el.dataset.id === state.selectedId);
+    });
+  }
+  armTimer();
+  updatePlacementBar();
 }
 
 function ensureWallBooted() {
@@ -704,6 +882,7 @@ function ensureWallBooted() {
   window.addEventListener("resize", () => {
     window.clearTimeout(resizeTimer);
     resizeTimer = window.setTimeout(() => {
+      if (state.editMode) return;
       state.wallSig = "";
       if (state.lastWallItems) renderWall(state.lastWallItems);
     }, 160);
@@ -1039,6 +1218,7 @@ function renderWall(items) {
 
   const flipTarget = state.flippedId;
 
+  wallGrid.classList.toggle("is-repaint", wallHasPainted);
   wallGrid.replaceChildren();
   const canvasH = wallCanvasHeight(pageItems.length || 1);
   wallGrid.style.minHeight = `${canvasH}px`;
@@ -1072,6 +1252,7 @@ function renderWall(items) {
   state.wallLoadToken += 1;
   scheduleImageLoads(state.wallLoadToken);
   prefetchWallPage(items, state.currentPage + 1);
+  wallHasPainted = true;
 }
 
 function watchWall() {
@@ -1088,9 +1269,9 @@ function watchWall() {
       if (state.currentPage >= totalPages(state.lastWallItems || [])) {
         state.currentPage = Math.max(0, totalPages(state.lastWallItems || []) - 1);
       }
-      state.wallSig = "";
       updatePageIndicator(state.lastWallItems || []);
-      if (state.lastWallItems) renderWall(state.lastWallItems);
+      if (state.editMode) return;
+      if (state.lastWallItems) scheduleRenderWall(state.lastWallItems);
     },
     () => {}
   );
@@ -1098,9 +1279,11 @@ function watchWall() {
   onValue(
     ref(db, "wallLayouts"),
     (snap) => {
-      state.layouts = snap.val() || {};
+      const next = snap.val() || {};
+      state.layouts = next;
+      if (state.editMode) return;
       state.wallSig = "";
-      if (state.lastWallItems) renderWall(state.lastWallItems);
+      if (state.lastWallItems) scheduleRenderWall(state.lastWallItems);
     },
     () => {}
   );
@@ -1122,15 +1305,7 @@ function watchWall() {
       const items = mergeWallItems(firebaseItems);
       wallStatus.textContent = "";
       wallStatus.hidden = true;
-      if (state.placementId) {
-        const page = pageIndexForMemory(items, state.placementId);
-        if (page !== state.currentPage) {
-          state.currentPage = page;
-          localStorage.setItem("wall-page", String(page));
-        }
-        state.selectedId = state.placementId;
-      }
-      renderWall(items);
+      applyWallItemsFromFirebase(items);
       prefetchAroundPage(items, state.currentPage);
       if (items.length && wallGrid.clientWidth < 48) {
         requestAnimationFrame(() => {
@@ -1194,7 +1369,8 @@ function initWallSwipe() {
 function initWallChrome() {
   noteZoomBackdrop?.addEventListener("click", closeNoteZoom);
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeNoteZoom();
+    if (e.key === "Escape" && state.noteZoomOpen) closeNoteZoom();
+    else if (e.key === "Escape" && state.editMode) setEditMode(false);
   });
 
   piuFab?.addEventListener("click", (e) => {
@@ -1243,13 +1419,14 @@ function initWallChrome() {
     if (state.editMode) saveCurrentPageName();
   });
 
-  actionWallEdit?.addEventListener("click", () => {
-    setEditMode(true);
-  });
+  actionWallEdit?.addEventListener("click", () => openWallEdit());
+
+  wallGraceEdit?.addEventListener("click", () => openWallEdit());
 
   wallEditDone?.addEventListener("click", () => {
     if (state.placementMode && msLeft() > 0) {
       state.placementMode = false;
+      state.placementId = null;
       updatePlacementBar();
     }
     setEditMode(false);
@@ -1372,7 +1549,7 @@ async function compressImage(file) {
   } catch {
     throw new Error("Cette photo ne passe pas. Essaie un JPEG.");
   }
-  const maxEdge = 820;
+  const maxEdge = 760;
   const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
   const width = Math.max(1, Math.round(bitmap.width * scale));
   const height = Math.max(1, Math.round(bitmap.height * scale));
@@ -1454,7 +1631,7 @@ async function submitMemory() {
         editKey,
         removed: false,
       });
-      await showGrace({
+      returnAfterMemoryEdit({
         id,
         editKey,
         createdAt,
@@ -1594,6 +1771,16 @@ if (uploadRoute && !UPLOADS_ENABLED) {
 } else {
   showScreen("wall");
   ensureWallBooted();
+  const storedGrant = readGrant();
+  if (storedGrant) {
+    state.grant = storedGrant;
+    if (msLeft() <= 0) lockGrace();
+    else armTimer();
+  } else {
+    state.grant = null;
+    state.placementMode = false;
+    state.placementId = null;
+  }
   import("./wall-prefetch.js")
     .then((m) => m.warmFirstWallPage())
     .catch(() => {});
